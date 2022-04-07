@@ -3,10 +3,6 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import javax.net.ssl.CertPathTrustManagerParameters;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
 import javax.xml.crypto.*;
 import javax.xml.crypto.dsig.*;
 import javax.xml.crypto.dsig.dom.DOMSignContext;
@@ -22,6 +18,8 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import java.net.URL;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.cert.*;
@@ -34,7 +32,7 @@ import java.io.*;
 public class main {
 
     static String url = "jdbc:postgresql://localhost:5433/test";
-    static String user = "postgres";
+    static String BDuser = "postgres";
     static String BDpassword = "admin";
     static KeyStore ks;
     static PublicKey pk;
@@ -42,10 +40,11 @@ public class main {
     static Scanner sc = new Scanner(System.in);
     static java.sql.Date ed, vd;
     static KeyStore ks1;
-    static String p12_u, email;
+    static String p12_u, usuario;
 
     public static void main(String[] args) {
 
+        //test();
         int c = -1;
         while (c != 0) {
             System.out.println("Presione:\n1-> Para guardar un pk12 en la BD\n2-> Para listar los pk12 actuales\n" +
@@ -58,8 +57,8 @@ public class main {
                 create_keystore(path_in);
                 open_p12_file();
                 String[] data = new String[6];
-                data[0] = email;
-                data[1] = p12_u;
+                data[0] = p12_u;
+                data[1] = usuario;
                 data[4] = e64(pk);
                 File p12 = new File(path_in);
                 data[5] = es_p12(p12);
@@ -72,9 +71,9 @@ public class main {
                 String name = sc.nextLine();
                 System.out.println("Donde desea exportarlo?");
                 String path_out = sc.nextLine();
-                get_data("select * from test where nombre = \'" + name + "\';");
+                get_data("select * from test where nombre = '" + name + "';");
                 System.out.println("Exportando...");
-                d_p12(get_data("select * from test where nombre = \'" + name + "\';", "p12_file"), name, path_out);
+                d_p12(get_data("select * from test where nombre = '" + name + "';", "p12_file"), name, path_out);
             } else if (c == 4) {
                 System.out.println("Introduzca la ruta del archivo q desea firmar");
                 String path = sc.nextLine();
@@ -89,10 +88,15 @@ public class main {
                     e.printStackTrace();
                 }
             } else if (c == 6) {
-                verify_crl();
+                try {
+                    System.out.println(verify_crl());
+                } catch (CertificateException | KeyStoreException | IOException | CRLException e) {
+                    System.out.println(e.getMessage());
+                }
             } else if (c == 7) {
-                verify_crl();
-            }else if (c == 0) {
+                System.out.println("not implemented");
+                //verify_ocsp();
+            } else if (c == 0) {
                 break;
             }
         }
@@ -114,7 +118,7 @@ public class main {
             fin.read(b);
             encoded = Base64.getEncoder().encodeToString(b);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         return encoded;
     }
@@ -124,10 +128,8 @@ public class main {
             byte[] decode = Base64.getDecoder().decode(cf);
             fos.write(decode);
             System.out.println("Su p12 ha sido exportado con exito");
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
     }
 
@@ -139,28 +141,29 @@ public class main {
             password = pass.toCharArray();
             ks.load(new FileInputStream(path), password);
         } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
     }
 
     public static void open_p12_file() {
         Certificate cert;
         try {
-            cert = ks.getCertificate("1");
+            Enumeration<String> alias = ks.aliases();
+            cert = ks.getCertificate(alias.nextElement());
             pk = cert.getPublicKey();
-            p12_u = ((X509Certificate) cert).getSubjectDN().toString().split(",")[0].substring(13);
-            email = ((X509Certificate) cert).getSubjectDN().toString().split(",")[1].substring(4);
+            p12_u = ((X509Certificate) cert).getSubjectDN().getName().split(",")[4].substring(4);
+            usuario = ((X509Certificate) cert).getSubjectDN().getName().split(",")[5].substring(5);
             ed = new Date(((X509Certificate) cert).getNotBefore().getTime());
             vd = new Date(((X509Certificate) cert).getNotAfter().getTime());
         } catch (NullPointerException | KeyStoreException e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
     }
 
     public static Connection connect() {
         Connection conn = null;
         try {
-            conn = DriverManager.getConnection(url, user, BDpassword);
+            conn = DriverManager.getConnection(url, BDuser, BDpassword);
         } catch (SQLException e) {
             System.out.println(e.getMessage());
         }
@@ -168,7 +171,7 @@ public class main {
     }
 
     public static long db_flush(String[] data) {
-        String sql = "insert into test (nombre, email, expedition_date, expire_date, public_key, p12_file) " +
+        String sql = "insert into test (nombre, usuario, expedition_date, expire_date, public_key, p12_file) " +
                 "values (?,?,?,?,?,?)";
         long id = 0;
         try (Connection conn = connect(); PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -186,8 +189,8 @@ public class main {
                     }
                 }
             }
-        } catch (SQLException throwables) {
-            throwables.printStackTrace();
+        } catch (SQLException e) {
+            System.out.println(e.getMessage());
         }
         return id;
     }
@@ -195,23 +198,23 @@ public class main {
     public static void get_data(String sql) {
         try (Connection conn = connect(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
             data(rs);
-        } catch (SQLException throwables) {
-            throwables.printStackTrace();
+        } catch (SQLException e) {
+            System.out.println(e.getMessage());
         }
     }
 
     public static String get_data(String sql, String c) {
         try (Connection conn = connect(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
             return data1(rs, c);
-        } catch (SQLException throwables) {
-            throwables.printStackTrace();
+        } catch (SQLException e) {
+            System.out.println(e.getMessage());
         }
         return "";
     }
 
     public static void data(ResultSet rs) throws SQLException {
         while (rs.next()) {
-            System.out.println(rs.getString("nombre") + "\t" + rs.getString("email") + "\t" + rs.getString("expedition_date") + "\t"
+            System.out.println(rs.getString("nombre") + "\t" + rs.getString("usuario") + "\t" + rs.getString("expedition_date") + "\t"
                     + rs.getString("expire_date") + "\t" + rs.getString("public_key") + "\t" + rs.getString("p12_file"));
         }
     }
@@ -237,13 +240,8 @@ public class main {
             Document doc = load_document(file_to_sign_path);
             sign(doc, keyEntry, fac, si, ki);
             write_signed(doc, signed_file_path);
-        } catch (InvalidAlgorithmParameterException | UnrecoverableEntryException | CertificateException | NoSuchAlgorithmException |
-                KeyStoreException | IOException | ParserConfigurationException | SAXException | MarshalException e) {
-            e.printStackTrace();
-        } catch (XMLSignatureException e) {
-            e.printStackTrace();
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
 
     }
@@ -262,10 +260,8 @@ public class main {
                             null,
                             null
                     );
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (InvalidAlgorithmParameterException e) {
-            e.printStackTrace();
+        } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+            System.out.println(e.getMessage());
         }
         return null;
     }
@@ -355,12 +351,18 @@ public class main {
         return false;
     }
 
-    public static void verify_crl() {
-        try {
-            System.out.println("Introduzca la ruta de su p12");
-            String path = sc.nextLine();
-            create_keystore(path);
-            TrustAnchor ta = new TrustAnchor(((X509Certificate) ks.getCertificate("1")).getSubjectDN().getName(), ks.getCertificate("1").getPublicKey(), null);
+    public static String verify_crl() throws CertificateException, KeyStoreException, IOException, CRLException {
+
+        System.out.println("Introduzca la ruta de su p12");
+        String path = sc.nextLine();
+        create_keystore(path);
+
+        boolean f3, f5;
+        f3 = validate_p12_crl("/mnt/data/cesim/romper/CRLs/_nuevas/new/ROOT AC UCI.crl");
+        f5 = validate_p12_crl("/mnt/data/cesim/romper/CRLs/_nuevas/new/Universidad de las Ciencias Informáticas.crl");
+        //System.out.println(f3 + "\t" + f5);
+        return f3 && f5 ? "El certificado es valido" : "El certificado ha sido revocado";
+            /*
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
 
@@ -374,25 +376,112 @@ public class main {
                     )
             );
 
+            //System.setProperty("javax.net.debug","all");
+            //System.setProperty("javax.net.ssl.trustStore","/etc/ssl/certs");
+
             PKIXBuilderParameters pkix_params = new PKIXBuilderParameters(ks, new X509CertSelector());
+
+            //System.out.println(pkix_params.getTrustAnchors());
+
             pkix_params.addCertPathChecker(rc);
             tmf.init(new CertPathTrustManagerParameters(pkix_params));
             kmf.init(ks, password);
+            System.out.println(kmf.getKeyManagers().length);
 
             SSLContext ctx = SSLContext.getInstance("TLS");
             ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-        } catch (KeyStoreException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | UnrecoverableKeyException | KeyManagementException e) {
+
+        } catch (KeyStoreException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | UnrecoverableKeyException | KeyManagementException | IOException | CertificateException | CRLException e) {
             System.out.println(e.getMessage());
         }
+         */
     }
-    public static void validate_OSCP(){
 
+    public static boolean validate_p12_crl(String crlp) throws KeyStoreException, CertificateException, IOException, CRLException {
+
+        X509Certificate cert = (X509Certificate) ks.getCertificate(ks.aliases().nextElement());
+        System.out.println(cert.getSerialNumber() + " " + cert.getIssuerDN().toString());
+        CertificateFactory cf = CertificateFactory.getInstance("X509");
+        X509CRL crl;
+        X509CRLEntry revoked_cert;
+        URL url = new URL("file:///" + crlp);
+        URLConnection urlc = url.openConnection();
+        DataInputStream inStream = new DataInputStream(urlc.getInputStream());
+        //System.out.println(cf.generateCRL(inStream));
+        crl = (X509CRL) cf.generateCRL(inStream);
+        /*
+        for (X509CRLEntry x : crl.getRevokedCertificates()) {
+            System.out.println(x.getSerialNumber());
+        }
+         */
+        revoked_cert = crl.getRevokedCertificate(cert.getSerialNumber());
+        return revoked_cert == null;
     }
 
     /*
+    public static void test() {
+        System.out.println("Introduzca la ruta de su p12");
+        String path = sc.nextLine();
+        CertificateFactory cf = null;
+        try {
+            cf = CertificateFactory.getInstance("X.509");
+            FileInputStream in = new FileInputStream(path);
+            X509CRL crl = (X509CRL) cf.generateCRL(in);
+            Set s = crl.getRevokedCertificates();
+            if (s != null && !s.isEmpty()) {
+                Iterator t = s.iterator();
+                while (t.hasNext()) {
+                    X509CRLEntry entry = (X509CRLEntry) t.next();
+                    System.out.println("SN: " + entry.getSerialNumber());
+                    System.out.println("RD: " + entry.getRevocationDate());
+                    System.out.println("EX: " + entry.hasExtensions());
+                }
+            }
+        } catch (CertificateException | FileNotFoundException | CRLException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+     */
+
+    /* public static void crl_checking() {
+        System.out.println("Introduzca la ruta de su p12");
+        String path = sc.nextLine();
+        create_keystore(path);
+        // Calendar cal = Date.;
+        try {
+            X509Certificate cert = (X509Certificate) ks.getCertificate("1");
+            // cert.checkValidity();
+        } catch (KeyStoreException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+
+     */
+
+    /*
+    public static void verify_ocsp() {
+
+        System.out.println("Introduzca la ruta de su p12");
+        String path = sc.nextLine();
+        create_keystore(path);
+        try {
+            Certificate usercert = ks.getCertificate("1");
+            OCSP.RevocationStatus ocsp = OCSP.check((X509Certificate) usercert, (X509Certificate) usercert, URI.create("https://127.0.0.1"), (X509Certificate) usercert, new java.util.Date());
+            System.out.println(ocsp);
+        } catch (KeyStoreException e) {
+            System.out.println(e.getMessage());
+        } catch (CertPathValidatorException e) {
+            System.out.println(e.getMessage());
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
+
+    }
+
     public static boolean is_cert_valid() {
         try{
-
 
             KeyStore kss = KeyStore.getInstance("JKS");
             System.out.println("Introduzca la ruta de su p12");
