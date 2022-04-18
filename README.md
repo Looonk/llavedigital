@@ -1,7 +1,7 @@
-// This is black magic
+This is black magic
 
-// from
+from
 
-// *Some stackoverlow link
+*Some stackoverlow link
 
-// Don’t play with magic, it can BITE.
+Don’t play with magic, it can BITE.
