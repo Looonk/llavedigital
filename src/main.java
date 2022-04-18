@@ -400,6 +400,7 @@ public class main {
     public static boolean validate_p12_crl(String crlp) throws KeyStoreException, CertificateException, IOException, CRLException {
 
         X509Certificate cert = (X509Certificate) ks.getCertificate(ks.aliases().nextElement());
+
         System.out.println(cert.getSerialNumber() + " " + cert.getIssuerDN().toString());
         CertificateFactory cf = CertificateFactory.getInstance("X509");
         X509CRL crl;
@@ -409,11 +410,6 @@ public class main {
         DataInputStream inStream = new DataInputStream(urlc.getInputStream());
         //System.out.println(cf.generateCRL(inStream));
         crl = (X509CRL) cf.generateCRL(inStream);
-        /*
-        for (X509CRLEntry x : crl.getRevokedCertificates()) {
-            System.out.println(x.getSerialNumber());
-        }
-         */
         revoked_cert = crl.getRevokedCertificate(cert.getSerialNumber());
         return revoked_cert == null;
     }
@@ -498,7 +494,7 @@ public class main {
                 String p = sc.nextLine();
 
             }
-            CertPath cp = cf.generateCertPath(cert_list);
+            //CertPath cp = cf.generateCertPath(cert_list);
             CertPathValidator cv = CertPathValidator.getInstance("PKIX");
 
             PKIXParameters params = new PKIXParameters(kss);
@@ -524,5 +520,7 @@ public class main {
     }
 
      */
+
+
 
 }
