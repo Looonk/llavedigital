@@ -2,6 +2,8 @@ import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+import sun.security.provider.certpath.OCSP;
+import sun.security.provider.certpath.OCSPResponse;
 
 import javax.xml.crypto.*;
 import javax.xml.crypto.dsig.*;
@@ -18,6 +20,7 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -94,8 +97,7 @@ public class main {
                     System.out.println(e.getMessage());
                 }
             } else if (c == 7) {
-                System.out.println("not implemented");
-                //verify_ocsp();
+                validate_p12_ocsp();
             } else if (c == 0) {
                 break;
             }
@@ -414,6 +416,26 @@ public class main {
         return revoked_cert == null;
     }
 
+    public static boolean validate_p12_ocsp() {
+        System.out.println("Introduzca la ruta de su p12");
+        String path = sc.nextLine();
+        create_keystore(path);
+
+        try {
+            Security.setProperty("ocsp.enable", "true");
+            Security.setProperty("ocsp.responderURL", "https://ldap.uci.cu:389");
+            //Security.setProperty("ocsp.responderCertSubjectName", ((X509Certificate) ks.getCertificate("1")).getIssuerDN().getName());
+
+            //CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
+            Certificate usercert = ks.getCertificate("1");
+            OCSP.RevocationStatus ocsp = OCSP.check((X509Certificate)usercert, (X509Certificate)usercert, URI.create("https://ldap.uci.cu:389"),(X509Certificate)usercert, new java.util.Date());
+            System.out.println(ocsp);
+        }
+        catch (KeyStoreException | CertPathValidatorException | IOException e){
+            System.out.println(e.getMessage());
+        }
+        return false;
+    }
     /*
     public static void test() {
         System.out.println("Introduzca la ruta de su p12");
@@ -456,6 +478,7 @@ public class main {
 
      */
 
+
     /*
     public static void verify_ocsp() {
 
@@ -464,20 +487,18 @@ public class main {
         create_keystore(path);
         try {
             Certificate usercert = ks.getCertificate("1");
-            OCSP.RevocationStatus ocsp = OCSP.check((X509Certificate) usercert, (X509Certificate) usercert, URI.create("https://127.0.0.1"), (X509Certificate) usercert, new java.util.Date());
+            OCSP.RevocationStatus ocsp = OCSP.check((X509Certificate) usercert, (X509Certificate) usercert, URI.create("https://ldap.uci.cu"), (X509Certificate) usercert, new java.util.Date());
             System.out.println(ocsp);
-        } catch (KeyStoreException e) {
-            System.out.println(e.getMessage());
-        } catch (CertPathValidatorException e) {
-            System.out.println(e.getMessage());
-        } catch (IOException e) {
+        } catch (KeyStoreException | CertPathValidatorException | IOException e) {
             System.out.println(e.getMessage());
         }
 
     }
+     */
 
+    /*
     public static boolean is_cert_valid() {
-        try{
+        try {
 
             KeyStore kss = KeyStore.getInstance("JKS");
             System.out.println("Introduzca la ruta de su p12");
@@ -489,12 +510,8 @@ public class main {
 
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             ArrayList<X509Certificate> cert_list = new ArrayList<>();
-            while (true){
-                System.out.println("Introduzca la ruta del p12 a agregar");
-                String p = sc.nextLine();
 
-            }
-            //CertPath cp = cf.generateCertPath(cert_list);
+            CertPath cp = cf.generateCertPath(cert_list);
             CertPathValidator cv = CertPathValidator.getInstance("PKIX");
 
             PKIXParameters params = new PKIXParameters(kss);
@@ -504,23 +521,17 @@ public class main {
             System.setProperty("com.sun.net.ssl.checkRenovation", "true");
             System.setProperty("com.sun.security.enableCRLDP", "true");
 
+
             PKIXCertPathValidatorResult r = (PKIXCertPathValidatorResult) cv.validate(cp, params);
             return true;
 
-        } catch (CertificateException | NoSuchAlgorithmException | KeyStoreException | FileNotFoundException e) {
-            System.err.println(e.getMessage());
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
-        } catch (InvalidAlgorithmParameterException e) {
-            System.err.println(e.getMessage());
-        } catch (CertPathValidatorException e) {
+        } catch (CertificateException | NoSuchAlgorithmException | KeyStoreException | IOException | InvalidAlgorithmParameterException | CertPathValidatorException e) {
             System.err.println(e.getMessage());
         }
         return false;
     }
 
+
      */
-
-
 
 }
