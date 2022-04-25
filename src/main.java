@@ -97,7 +97,8 @@ public class main {
                     System.out.println(e.getMessage());
                 }
             } else if (c == 7) {
-                validate_p12_ocsp();
+                System.out.println(validate_p12_ocsp() ? "El certificado es valido" : "El certificado ha sido revocado");
+                //validate_p12_ocsp();
             } else if (c == 0) {
                 break;
             }
@@ -336,7 +337,7 @@ public class main {
         trans.transform(new DOMSource(doc), new StreamResult(os));
     }
 
-//---------------------------------------------------------------validaciones-----------------------------------------------------------------------------
+//----------------------------------------------------------------validations-----------------------------------------------------------------------------
 
     public static boolean verify_signature(Document doc) {
         try {
@@ -422,20 +423,27 @@ public class main {
         create_keystore(path);
 
         try {
+            System.setProperty("https.protocols","TLSv1,TLSv1.1,TLSv1.2");
+            System.setProperty("com.sun.ssl.checkRevocation", "true");
             Security.setProperty("ocsp.enable", "true");
             Security.setProperty("ocsp.responderURL", "https://ldap.uci.cu:389");
-            //Security.setProperty("ocsp.responderCertSubjectName", ((X509Certificate) ks.getCertificate("1")).getIssuerDN().getName());
 
+
+            //System.out.println(ks.getCertificate(ks.aliases().nextElement()));
+            //Security.setProperty("ocsp.responderCertSubjectName", ((X509Certificate) ks.getCertificate(ks.aliases().nextElement())).getIssuerDN().getName());
             //CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
-            Certificate usercert = ks.getCertificate("1");
-            OCSP.RevocationStatus ocsp = OCSP.check((X509Certificate)usercert, (X509Certificate)usercert, URI.create("https://ldap.uci.cu:389"),(X509Certificate)usercert, new java.util.Date());
+
+            Certificate usercert = ks.getCertificate(ks.aliases().nextElement());
+            OCSP.RevocationStatus ocsp = OCSP.check((X509Certificate) usercert, (X509Certificate) usercert, URI.create("https://ldap.uci.cu:389"), (X509Certificate) usercert, new java.util.Date());
             System.out.println(ocsp);
+            return true;
         }
         catch (KeyStoreException | CertPathValidatorException | IOException e){
-            System.out.println(e.getMessage());
+            e.printStackTrace();
         }
         return false;
     }
+
     /*
     public static void test() {
         System.out.println("Introduzca la ruta de su p12");
@@ -477,7 +485,6 @@ public class main {
 
 
      */
-
 
     /*
     public static void verify_ocsp() {
